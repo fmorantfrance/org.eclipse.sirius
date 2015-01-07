@@ -161,7 +161,9 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
      * saving will be performed after the current transaction has been
      * successfully commited. Otherwise it is performed immediatly.
      */
-    private final class Saver extends ResourceSetListenerImpl {
+    private static final class Saver extends ResourceSetListenerImpl {
+
+        private final DAnalysisSessionImpl session;
 
         private boolean deferSaveToPostCommit;
 
@@ -192,8 +194,18 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
             }
         };
 
+        /**
+         * Create a new Saver for the specified session.
+         * 
+         * @param session
+         *            the session to save.
+         */
+        public Saver(DAnalysisSessionImpl session) {
+            this.session = session;
+        }
+
         public void initialize() {
-            TransactionalEditingDomain ted = getTransactionalEditingDomain();
+            TransactionalEditingDomain ted = session.getTransactionalEditingDomain();
             if (ted instanceof TransactionalEditingDomain.Lifecycle) {
                 TransactionalEditingDomain.Lifecycle lc = (TransactionalEditingDomain.Lifecycle) ted;
                 lc.addTransactionalEditingDomainListener(domainListener);
@@ -201,7 +213,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
         }
 
         public void dispose() {
-            TransactionalEditingDomain ted = getTransactionalEditingDomain();
+            TransactionalEditingDomain ted = session.getTransactionalEditingDomain();
             if (ted instanceof TransactionalEditingDomain.Lifecycle) {
                 TransactionalEditingDomain.Lifecycle lc = (TransactionalEditingDomain.Lifecycle) ted;
                 lc.removeTransactionalEditingDomainListener(domainListener);
@@ -245,7 +257,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
          */
         private void saveNow(Map<?, ?> options, IProgressMonitor monitor, boolean runExclusive) {
             try {
-                doSave(options, monitor, runExclusive);
+                session.doSave(options, monitor, runExclusive);
             } finally {
                 disarm();
             }
@@ -258,8 +270,8 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
         }
 
         private boolean transactionInProgress() {
-            if (getTransactionalEditingDomain() instanceof InternalTransactionalEditingDomain) {
-                InternalTransaction tx = ((InternalTransactionalEditingDomain) getTransactionalEditingDomain()).getActiveTransaction();
+            if (session.getTransactionalEditingDomain() instanceof InternalTransactionalEditingDomain) {
+                InternalTransaction tx = ((InternalTransactionalEditingDomain) session.getTransactionalEditingDomain()).getActiveTransaction();
                 return tx != null;
             }
             return false;
@@ -298,7 +310,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
     /** The custom saving policy the session should use. */
     protected SavingPolicy savingPolicy;
 
-    private final Saver saver = new Saver();
+    private final Saver saver = new Saver(this);
 
     private ReloadingPolicy reloadingPolicy;
 
