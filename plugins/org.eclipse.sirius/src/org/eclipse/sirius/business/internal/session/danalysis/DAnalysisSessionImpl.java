@@ -24,7 +24,6 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
@@ -49,15 +48,9 @@ import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.resource.ResourceSet;
 import org.eclipse.emf.ecore.util.ECrossReferenceAdapter;
 import org.eclipse.emf.ecore.util.EcoreUtil;
-import org.eclipse.emf.transaction.ResourceSetChangeEvent;
-import org.eclipse.emf.transaction.ResourceSetListenerImpl;
 import org.eclipse.emf.transaction.RunnableWithResult;
 import org.eclipse.emf.transaction.Transaction;
 import org.eclipse.emf.transaction.TransactionalEditingDomain;
-import org.eclipse.emf.transaction.TransactionalEditingDomainEvent;
-import org.eclipse.emf.transaction.TransactionalEditingDomainListener;
-import org.eclipse.emf.transaction.TransactionalEditingDomainListenerImpl;
-import org.eclipse.emf.transaction.impl.InternalTransaction;
 import org.eclipse.emf.transaction.impl.InternalTransactionalEditingDomain;
 import org.eclipse.emf.transaction.util.TransactionUtil;
 import org.eclipse.emf.transaction.util.ValidateEditSupport;
@@ -153,131 +146,6 @@ import com.google.common.collect.Sets.SetView;
  * @author cbrun
  */
 public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements Session, DAnalysisSession, ResourceSyncClient, ViewpointRegistryListener, ViewpointRegistryListener2 {
-
-    /**
-     * Encapsulates the decision of *when* to actually save the session's state
-     * when Session.save() is called. If Session.save() is called while a
-     * transaction is in progress and deferSaveToPostCommit is true, the actual
-     * saving will be performed after the current transaction has been
-     * successfully commited. Otherwise it is performed immediatly.
-     */
-    private static final class Saver extends ResourceSetListenerImpl {
-
-        private final DAnalysisSessionImpl session;
-
-        private boolean deferSaveToPostCommit;
-
-        private boolean saveInExclusiveTransaction;
-
-        private AtomicBoolean domainDisposed = new AtomicBoolean(false);
-
-        private AtomicBoolean saveOnPostCommit = new AtomicBoolean(false);
-
-        private Map<?, ?> options;
-
-        private IProgressMonitor monitor;
-
-        /**
-         * Make sure the Saver's state is reset after the transaction is
-         * finished, even in case of rollback (in which case #resourceSetChanged
-         * will not have need called).
-         */
-        private TransactionalEditingDomainListener domainListener = new TransactionalEditingDomainListenerImpl() {
-            @Override
-            public void transactionClosed(TransactionalEditingDomainEvent event) {
-                disarm();
-            }
-
-            @Override
-            public void editingDomainDisposing(TransactionalEditingDomainEvent event) {
-                domainDisposed.set(true);
-            }
-        };
-
-        /**
-         * Create a new Saver for the specified session.
-         * 
-         * @param session
-         *            the session to save.
-         */
-        public Saver(DAnalysisSessionImpl session) {
-            this.session = session;
-        }
-
-        public void initialize() {
-            TransactionalEditingDomain ted = session.getTransactionalEditingDomain();
-            if (ted instanceof TransactionalEditingDomain.Lifecycle) {
-                TransactionalEditingDomain.Lifecycle lc = (TransactionalEditingDomain.Lifecycle) ted;
-                lc.addTransactionalEditingDomainListener(domainListener);
-            }
-        }
-
-        public void dispose() {
-            TransactionalEditingDomain ted = session.getTransactionalEditingDomain();
-            if (ted instanceof TransactionalEditingDomain.Lifecycle) {
-                TransactionalEditingDomain.Lifecycle lc = (TransactionalEditingDomain.Lifecycle) ted;
-                lc.removeTransactionalEditingDomainListener(domainListener);
-            }
-            disarm();
-        }
-
-        @Override
-        public boolean isPostcommitOnly() {
-            return true;
-        }
-
-        @Override
-        public void resourceSetChanged(ResourceSetChangeEvent event) {
-            if (saveOnPostCommit.get()) {
-                saveNow(this.options, this.monitor, true);
-            }
-        }
-
-        public void save(Map<?, ?> options, IProgressMonitor monitor) {
-            boolean tip = transactionInProgress();
-            if (tip && deferSaveToPostCommit) {
-                saveOnPostCommit(options, monitor);
-            } else {
-                saveNow(options, monitor, saveInExclusiveTransaction && !tip && !domainDisposed.get());
-            }
-        }
-
-        /**
-         * Arm the trigger so that the saving is performed on the next
-         * post-commit.
-         */
-        private void saveOnPostCommit(Map<?, ?> options, IProgressMonitor monitor) {
-            this.options = options;
-            this.monitor = monitor;
-            this.saveOnPostCommit.set(true);
-        }
-
-        /**
-         * Save immediately and disarm the trigger.
-         */
-        private void saveNow(Map<?, ?> options, IProgressMonitor monitor, boolean runExclusive) {
-            try {
-                session.doSave(options, monitor, runExclusive);
-            } finally {
-                disarm();
-            }
-        }
-
-        protected void disarm() {
-            this.options = null;
-            this.monitor = null;
-            this.saveOnPostCommit.set(false);
-        }
-
-        private boolean transactionInProgress() {
-            if (session.getTransactionalEditingDomain() instanceof InternalTransactionalEditingDomain) {
-                InternalTransaction tx = ((InternalTransactionalEditingDomain) session.getTransactionalEditingDomain()).getActiveTransaction();
-                return tx != null;
-            }
-            return false;
-        }
-
-    }
 
     /** The {@link TransactionalEditingDomain} associated to this Session. */
     private TransactionalEditingDomain transactionalEditingDomain;
