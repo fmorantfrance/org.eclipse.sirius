@@ -10,18 +10,24 @@
  *******************************************************************************/
 package org.eclipse.sirius.business.internal.session.danalysis;
 
+import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 
 import org.eclipse.core.resources.IFile;
 import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.NullProgressMonitor;
+import org.eclipse.emf.common.command.Command;
 import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.resource.Resource;
 import org.eclipse.emf.ecore.util.EcoreUtil;
+import org.eclipse.emf.transaction.RunnableWithResult;
+import org.eclipse.emf.transaction.TransactionalEditingDomain;
 import org.eclipse.emf.workspace.util.WorkspaceSynchronizer;
+import org.eclipse.sirius.business.api.query.ResourceQuery;
 import org.eclipse.sirius.business.api.query.URIQuery;
 import org.eclipse.sirius.business.api.session.ReloadingPolicy.Action;
 import org.eclipse.sirius.business.api.session.SessionListener;
@@ -159,7 +165,7 @@ public class SessionResourcesSynchronizer implements ResourceSyncClient {
             break;
         case RELOAD:
             if (session.isOpen()) {
-                session.reloadResource(resource);
+                reloadResource(resource);
             }
             break;
         case REMOVE:
@@ -170,6 +176,53 @@ public class SessionResourcesSynchronizer implements ResourceSyncClient {
         }
     }
     
+    private void reloadResource(final Resource resource) throws IOException {
+        session.notifyListeners(SessionListener.ABOUT_TO_BE_REPLACED);
+        TransactionalEditingDomain ted = session.getTransactionalEditingDomain();
+
+        Command reloadingAnalysisCmd = null;
+        ResourceQuery resourceQuery = new ResourceQuery(resource);
+        boolean representationsResource = resourceQuery.isRepresentationsResource();
+        if (representationsResource) {
+            reloadingAnalysisCmd = new ReloadRepresentationsFileCmd(session, ted, "Reload " + resource.getURI() + "file", resource);
+        }
+        List<Resource> resourcesBeforeReload = Lists.newArrayList(ted.getResourceSet().getResources());
+        /* execute the reload operation as a read-only transaction */
+        RunnableWithResult<?> reload = new RunnableWithResult.Impl<Object>() {
+            @Override
+            public void run() {
+                resource.unload();
+                try {
+                    resource.load(Collections.EMPTY_MAP);
+                    EcoreUtil.resolveAll(resource);
+                } catch (IOException e) {
+                    setResult(e);
+                }
+            }
+        };
+        try {
+            ted.runExclusive(reload);
+            if (reload.getResult() != null) {
+                throw (IOException) reload.getResult();
+            } else if (!reload.getStatus().isOK()) {
+                SiriusPlugin.getDefault().error("a reload operation failed for unknown reason", null);
+            } else {
+                if (representationsResource) {
+                    ted.getCommandStack().execute(reloadingAnalysisCmd);
+                    if (resource.getURI().equals(session.getSessionResource().getURI())) {
+                        session.sessionResourceReloaded(resource);
+                    }
+                }
+                // Add the unknown resources to the semantic resources of this
+                // session.
+                session.discoverAutomaticallyLoadedSemanticResources(resourcesBeforeReload);
+                session.notifyListeners(SessionListener.REPLACED);
+            }
+        } catch (InterruptedException e) {
+            // do nothing
+        }
+    }
+
     /**
      * Remove a resource from the current session and close the current session
      * if it contains no more analysis resource.

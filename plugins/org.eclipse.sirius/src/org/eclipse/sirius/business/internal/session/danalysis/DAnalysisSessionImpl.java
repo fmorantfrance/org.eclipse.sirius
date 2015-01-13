@@ -10,7 +10,6 @@
  *******************************************************************************/
 package org.eclipse.sirius.business.internal.session.danalysis;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -32,7 +31,6 @@ import org.eclipse.core.runtime.OperationCanceledException;
 import org.eclipse.core.runtime.Status;
 import org.eclipse.core.runtime.SubProgressMonitor;
 import org.eclipse.emf.common.command.BasicCommandStack;
-import org.eclipse.emf.common.command.Command;
 import org.eclipse.emf.common.command.CommandStack;
 import org.eclipse.emf.common.notify.Adapter;
 import org.eclipse.emf.common.notify.Notification;
@@ -1420,56 +1418,20 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
         return Iterables.any(resources, new ResourceSyncClientNotificationFilter(resource));
     }
 
-    void reloadResource(final Resource resource) throws IOException {
-        notifyListeners(SessionListener.ABOUT_TO_BE_REPLACED);
+    void discoverAutomaticallyLoadedSemanticResources(List<Resource> allResources) {
+        // Add the unknown resources to the semantic resources of this
+        // session.
+        if (dAnalysisRefresher != null) {
+            dAnalysisRefresher.addAutomaticallyLoadedResourcesToSemanticResources(allResources);
+        }
+    }
 
-        Command reloadingAnalysisCmd = null;
-        ResourceQuery resourceQuery = new ResourceQuery(resource);
-        boolean representationsResource = resourceQuery.isRepresentationsResource();
-        if (representationsResource) {
-            reloadingAnalysisCmd = new ReloadRepresentationsFileCmd(this, transactionalEditingDomain, "Reload " + resource.getURI() + "file", resource);
-        }
-        List<Resource> resourcesBeforeReload = Lists.newArrayList(getTransactionalEditingDomain().getResourceSet().getResources());
-        /* execute the reload operation as a read-only transaction */
-        RunnableWithResult<?> reload = new RunnableWithResult.Impl<Object>() {
-            @Override
-            public void run() {
-                resource.unload();
-                try {
-                    resource.load(Collections.EMPTY_MAP);
-                    EcoreUtil.resolveAll(resource);
-                } catch (IOException e) {
-                    setResult(e);
-                }
-            }
-        };
-        try {
-            transactionalEditingDomain.runExclusive(reload);
-            if (reload.getResult() != null) {
-                throw (IOException) reload.getResult();
-            } else if (!reload.getStatus().isOK()) {
-                SiriusPlugin.getDefault().error("a reload operation failed for unknown reason", null);
-            } else {
-                if (representationsResource) {
-                    transactionalEditingDomain.getCommandStack().execute(reloadingAnalysisCmd);
-                    if (resource.getURI().equals(sessionResource.getURI())) {
-                        // sessionResource's contents before reload can be proxy
-                        // then need to be reassigned with reloaded
-                        // sessionResource reference.
-                        sessionResource = resource;
-                        mainDAnalysis = (DAnalysis) sessionResource.getContents().get(0);
-                    }
-                }
-                // Add the unknown resources to the semantic resources of this
-                // session.
-                if (dAnalysisRefresher != null) {
-                    dAnalysisRefresher.addAutomaticallyLoadedResourcesToSemanticResources(resourcesBeforeReload);
-                }
-                notifyListeners(SessionListener.REPLACED);
-            }
-        } catch (InterruptedException e) {
-            // do nothing
-        }
+    void sessionResourceReloaded(final Resource newSessionResource) {
+        // sessionResource's contents before reload can be proxy
+        // then need to be reassigned with reloaded
+        // sessionResource reference.
+        sessionResource = newSessionResource;
+        mainDAnalysis = (DAnalysis) sessionResource.getContents().get(0);
     }
 
     @Override
