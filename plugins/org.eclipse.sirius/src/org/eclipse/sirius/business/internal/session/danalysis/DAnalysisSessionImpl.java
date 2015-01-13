@@ -1418,10 +1418,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
      *         {@link Session}, false otherwise
      */
     protected boolean isResourceOfSession(Resource resource, Iterable<Resource> resources) {
-        boolean isResourceOfSession = false;
-        ResourceSyncClientNotificationFilter resourceSyncClientNotificationFilter = new ResourceSyncClientNotificationFilter(resource);
-        isResourceOfSession = Iterables.any(resources, resourceSyncClientNotificationFilter);
-        return isResourceOfSession;
+        return Iterables.any(resources, new ResourceSyncClientNotificationFilter(resource));
     }
 
     /**
