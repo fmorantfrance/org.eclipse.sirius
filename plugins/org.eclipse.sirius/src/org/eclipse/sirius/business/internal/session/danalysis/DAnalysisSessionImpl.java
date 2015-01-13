@@ -1535,8 +1535,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
      *         {@link ResourceStatus#READONLY}, false otherwise
      */
     protected boolean allResourcesAreInSync() {
-        final Iterable<? extends Resource> it = Iterables.concat(getSemanticResources(), getAllSessionResources(), super.getControlledResources());
-        return checkResourcesAreInSync(it);
+        return resourcesSynchronizer.allResourcesAreInSync();
     }
 
     /**
@@ -1549,16 +1548,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
      *         {@link ResourceStatus#READONLY}, false otherwise
      */
     protected final boolean checkResourcesAreInSync(Iterable<? extends Resource> resourcesToConsider) {
-        boolean allResourceAreInSync = true;
-        for (Resource resource : resourcesToConsider) {
-            ResourceStatus status = ResourceSetSync.getStatus(resource);
-            URI uri = resource.getURI();
-            allResourceAreInSync = status == ResourceStatus.SYNC || (!uri.isPlatformResource() && !new URIQuery(uri).isInMemoryURI() && !new URIQuery(uri).isCDOURI());
-            if (!allResourceAreInSync) {
-                break;
-            }
-        }
-        return allResourceAreInSync;
+        return resourcesSynchronizer.checkResourcesAreInSync(resourcesToConsider);
     }
 
     @Override
