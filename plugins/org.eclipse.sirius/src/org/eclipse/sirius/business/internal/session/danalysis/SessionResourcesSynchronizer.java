@@ -82,8 +82,7 @@ public class SessionResourcesSynchronizer implements ResourceSyncClient {
                 case CONFLICTING_DELETED:
                 case DELETED:
                     IProgressMonitor pm = new NullProgressMonitor();
-                    Collection<Resource> collection = newStatuses.get(newStatus);
-                    for (Resource resource : collection) {
+                    for (Resource resource : newStatuses.get(newStatus)) {
                         try {
                             /*
                              * if the project was renamed, deleted or closed we
@@ -143,13 +142,13 @@ public class SessionResourcesSynchronizer implements ResourceSyncClient {
         return false;
     }
 
-    private void processActions(final List<Action> actions, final Resource resource, IProgressMonitor pm) throws Exception {
-        for (final Action action : actions) {
+    private void processActions(List<Action> actions, Resource resource, IProgressMonitor pm) throws Exception {
+        for (Action action : actions) {
             processAction(action, resource, pm);
         }
     }
 
-    private void processAction(final Action action, final Resource resource, IProgressMonitor pm) throws Exception {
+    private void processAction(Action action, final Resource resource, IProgressMonitor pm) throws Exception {
         switch (action) {
         case CLOSE_SESSION:
             session.close(pm);
@@ -177,8 +176,7 @@ public class SessionResourcesSynchronizer implements ResourceSyncClient {
      *         {@link ResourceStatus#READONLY}, false otherwise
      */
     protected boolean allResourcesAreInSync() {
-        final Iterable<? extends Resource> it = Iterables.concat(session.getSemanticResources(), session.getAllSessionResources(), session.getControlledResources());
-        return checkResourcesAreInSync(it);
+        return checkResourcesAreInSync(getAllSessionResources());
     }
 
     /**
@@ -205,13 +203,17 @@ public class SessionResourcesSynchronizer implements ResourceSyncClient {
 
     private Multimap<ResourceStatus, Resource> getImpactingNewStatuses(Collection<ResourceStatusChange> changes) {
         Multimap<ResourceStatus, Resource> impactingNewStatuses = LinkedHashMultimap.create();
-        Iterable<Resource> resources = Iterables.concat(session.getSemanticResources(), session.getAllSessionResources(), session.getControlledResources());
+        Iterable<Resource> resources = getAllSessionResources();
         for (ResourceStatusChange change : changes) {
             if (session.isResourceOfSession(change.getResource(), resources)) {
                 impactingNewStatuses.put(change.getNewStatus(), change.getResource());
             }
         }
         return impactingNewStatuses;
+    }
+
+    private Iterable<Resource> getAllSessionResources() {
+        return Iterables.concat(session.getSemanticResources(), session.getAllSessionResources(), session.getControlledResources());
     }
 
 }
