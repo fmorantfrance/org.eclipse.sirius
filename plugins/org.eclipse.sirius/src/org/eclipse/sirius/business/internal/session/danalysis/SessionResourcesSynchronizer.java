@@ -18,7 +18,9 @@ import org.eclipse.core.resources.IProject;
 import org.eclipse.core.runtime.IProgressMonitor;
 import org.eclipse.core.runtime.NullProgressMonitor;
 import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.emf.workspace.util.WorkspaceSynchronizer;
 import org.eclipse.sirius.business.api.query.URIQuery;
 import org.eclipse.sirius.business.api.session.ReloadingPolicy.Action;
@@ -26,12 +28,14 @@ import org.eclipse.sirius.business.api.session.SessionListener;
 import org.eclipse.sirius.common.tools.api.resource.ResourceSetSync;
 import org.eclipse.sirius.common.tools.api.resource.ResourceSetSync.ResourceStatus;
 import org.eclipse.sirius.common.tools.api.resource.ResourceSyncClient;
+import org.eclipse.sirius.tools.api.command.semantic.RemoveSemanticResourceCommand;
 import org.eclipse.sirius.viewpoint.SiriusPlugin;
 import org.eclipse.sirius.viewpoint.SyncStatus;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.LinkedHashMultimap;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
 
 /**
@@ -159,10 +163,35 @@ public class SessionResourcesSynchronizer implements ResourceSyncClient {
             }
             break;
         case REMOVE:
-            session.removeResourceFromSession(resource, pm);
+            removeResourceFromSession(resource, pm);
             break;
         default:
             break;
+        }
+    }
+    
+    /**
+     * Remove a resource from the current session and close the current session
+     * if it contains no more analysis resource.
+     * 
+     * @param resource
+     *            The resource to remove
+     */
+    private void removeResourceFromSession(Resource resource, IProgressMonitor pm) {
+        if (session.getSemanticResources().contains(resource)) {
+            session.getTransactionalEditingDomain().getCommandStack().execute(new RemoveSemanticResourceCommand(session, resource, false, new NullProgressMonitor()));
+        } else if (session.getAllSessionResources().contains(resource)) {
+            session.removeAnalysis(resource);
+        }
+        if (session.getResources().contains(resource)) {
+            for (final EObject root : Lists.newArrayList(resource.getContents())) {
+                EcoreUtil.remove(root);
+            }
+            session.getResources().remove(resource);
+        }
+        // delete session only if no more aird file is open
+        if (session.getAllSessionResources().isEmpty()) {
+            session.close(pm);
         }
     }
 

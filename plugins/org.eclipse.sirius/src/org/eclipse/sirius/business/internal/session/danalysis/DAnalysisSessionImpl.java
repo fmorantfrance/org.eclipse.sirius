@@ -98,7 +98,6 @@ import org.eclipse.sirius.ecore.extender.business.api.accessor.exception.Illegal
 import org.eclipse.sirius.ecore.extender.business.api.permission.IPermissionAuthority;
 import org.eclipse.sirius.ecore.extender.business.api.permission.PermissionAuthorityRegistry;
 import org.eclipse.sirius.ecore.extender.business.api.permission.exception.LockedInstanceException;
-import org.eclipse.sirius.tools.api.command.semantic.RemoveSemanticResourceCommand;
 import org.eclipse.sirius.tools.api.command.ui.NoUICallback;
 import org.eclipse.sirius.tools.api.interpreter.InterpreterRegistry;
 import org.eclipse.sirius.tools.api.profiler.SiriusTasksKey;
@@ -1419,31 +1418,6 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
      */
     protected boolean isResourceOfSession(Resource resource, Iterable<Resource> resources) {
         return Iterables.any(resources, new ResourceSyncClientNotificationFilter(resource));
-    }
-
-    /**
-     * Remove a resource from the current session and close the current session
-     * if it contains no more analysis resource.
-     * 
-     * @param resource
-     *            The resource to remove
-     */
-    void removeResourceFromSession(Resource resource, IProgressMonitor pm) {
-        if (this.getSemanticResources().contains(resource)) {
-            getTransactionalEditingDomain().getCommandStack().execute(new RemoveSemanticResourceCommand(this, resource, false, new NullProgressMonitor()));
-        } else if (this.getAllSessionResources().contains(resource)) {
-            this.removeAnalysis(resource);
-        }
-        if (this.getResources().contains(resource)) {
-            for (final EObject root : Lists.newArrayList(resource.getContents())) {
-                EcoreUtil.remove(root);
-            }
-            this.getResources().remove(resource);
-        }
-        // delete session only if no more aird file is open
-        if (this.getAllSessionResources().isEmpty()) {
-            this.close(pm);
-        }
     }
 
     void reloadResource(final Resource resource) throws IOException {
