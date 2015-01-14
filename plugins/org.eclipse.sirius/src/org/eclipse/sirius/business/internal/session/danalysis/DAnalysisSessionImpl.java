@@ -196,6 +196,8 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
 
     private RepresentationNameListener representationNameListener;
 
+    private ModelAccessor accessor;
+
     /**
      * Create a new session.
      * 
@@ -637,14 +639,11 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
             return;
         }
         final Collection<EPackage> collectedMetamodels = collectMetamodels(newResource.getAllContents());
-        final ModelAccessor accessor = getModelAccessor();
-        if (accessor != null) {
-            final Collection<EcoreMetamodelDescriptor> descriptors = new ArrayList<EcoreMetamodelDescriptor>();
-            for (final EPackage package1 : collectedMetamodels) {
-                descriptors.add(new EcoreMetamodelDescriptor(package1));
-            }
-            accessor.activateMetamodels(descriptors);
+        final Collection<EcoreMetamodelDescriptor> descriptors = new ArrayList<EcoreMetamodelDescriptor>();
+        for (final EPackage package1 : collectedMetamodels) {
+            descriptors.add(new EcoreMetamodelDescriptor(package1));
         }
+        accessor.activateMetamodels(descriptors);
     }
 
     private Collection<EPackage> collectMetamodels(final TreeIterator<EObject> allContents) {
@@ -983,15 +982,13 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
     // *******************
 
     private void initializeAccessor() {
-        ModelAccessor accessor = getModelAccessor();
-        if (accessor != null) {
-            accessor.init(transactionalEditingDomain.getResourceSet());
-        }
+        accessor = SiriusPlugin.getDefault().getModelAccessorRegistry().getModelAccessor(transactionalEditingDomain.getResourceSet());
+        accessor.init(transactionalEditingDomain.getResourceSet());
     }
 
     @Override
     public ModelAccessor getModelAccessor() {
-        return SiriusPlugin.getDefault().getModelAccessorRegistry().getModelAccessor(transactionalEditingDomain.getResourceSet());
+        return accessor;
     }
 
     // *******************
