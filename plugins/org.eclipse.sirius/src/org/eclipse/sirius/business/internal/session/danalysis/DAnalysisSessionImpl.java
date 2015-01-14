@@ -1265,9 +1265,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
             }
             monitor.worked(1);
 
-            /* need to prepare for the init */
             configureInterpreter();
-            InterpreterRegistry.prepareImportsFromSession(this.interpreter, this);
             if (createNewRepresentations) {
                 monitor.subTask("Initialize representations");
                 for (final EObject semantic : semantics) {
