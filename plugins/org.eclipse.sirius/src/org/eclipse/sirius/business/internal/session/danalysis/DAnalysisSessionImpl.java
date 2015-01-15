@@ -1239,23 +1239,15 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
         try {
             monitor.beginTask("View creation for Sirius : " + viewpoint.getName(), 3 + 10 * semantics.size());
             Set<DView> intializedDViews = new LinkedHashSet<DView>();
-            for (DAnalysis dAnalysis : allAnalyses()) {
-                if (!hasAlreadyDViewForViewpoint(dAnalysis, viewpoint)) {
-                    // Try to get a orphan DView to reuse it
-                    DView firstOrphanDView = new DAnalysisQuery(dAnalysis).getFirstOrphanDView();
-                    DView dView = null;
-                    // Otherwise create a new one
-                    if (firstOrphanDView == null) {
-                        dView = ViewpointFactory.eINSTANCE.createDRepresentationContainer();
-                    } else {
-                        dView = firstOrphanDView;
-                    }
-                    dView.setViewpoint(viewpoint);
-                    dAnalysis.getOwnedViews().add(dView);
-                    dAnalysis.getSelectedViews().add(dView);
+            for (DAnalysis analysis : allAnalyses()) {
+                if (!hasAlreadyDViewForViewpoint(analysis, viewpoint)) {
+                    DView view = getOrCreateFreshDView(analysis);
+                    view.setViewpoint(viewpoint);
+                    analysis.getOwnedViews().add(view);
+                    analysis.getSelectedViews().add(view);
 
-                    dView.setInitialized(true);
-                    intializedDViews.add(dView);
+                    view.setInitialized(true);
+                    intializedDViews.add(view);
                 }
             }
             monitor.worked(1);
@@ -1276,6 +1268,15 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
             monitor.worked(1);
         } finally {
             monitor.done();
+        }
+    }
+
+    private static DView getOrCreateFreshDView(DAnalysis analysis) {
+        DView orphan = new DAnalysisQuery(analysis).getFirstOrphanDView();
+        if (orphan != null) {
+            return orphan;
+        } else {
+            return ViewpointFactory.eINSTANCE.createDRepresentationContainer();
         }
     }
 
