@@ -444,7 +444,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
     public Collection<DAnalysis> allAnalyses() {
         return new DAnalysisesInternalQuery(super.getAnalyses()).getAllAnalyses();
     }
-    
+
     DAnalysis getMainAnalysis() {
         return this.mainDAnalysis;
     }
@@ -684,7 +684,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
             }
         }
         unregisterResourceInCrossReferencer(res);
-        if (couldBeUnload(set, res)) {
+        if (canUnload(set, res)) {
             res.unload();
         }
         set.getResources().remove(res);
@@ -1326,7 +1326,7 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
         }
         flushOperations(transactionalEditingDomain);
         // Unload all referenced resources
-        unloadResource();
+        unloadResources();
         if (disposeEditingDomainOnClose) {
             // To remove remaining resource like environment:/viewpoint
             for (Resource resource : new ArrayList<Resource>(resourceSet.getResources())) {
@@ -1393,45 +1393,28 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
      * Method called at {@link Session#close(IProgressMonitor)} to unload all
      * referenced {@link Resource}s.
      */
-    private void unloadResource() {
-        for (final DAnalysis analysis : Iterables.filter(allAnalyses(), Predicates.notNull())) {
-            final Resource resource = analysis.eResource();
-            if (resource != null) {
-                if (resource.getResourceSet() != null) {
-                    resource.unload();
-                }
-                transactionalEditingDomain.getResourceSet().getResources().remove(resource);
-            }
+    private void unloadResources() {
+        ResourceSet rs = transactionalEditingDomain.getResourceSet();
+        for (Resource resource : getAllSessionResources()) {
+            resource.unload();
+            rs.getResources().remove(resource);
         }
-        /*
-         * We need to remove the remaining resources. For instance if a resource
-         * was unload, DAnalysis do not refer anymore the resource.
-         */
-        for (final Resource resource : super.getResources()) {
-            if (couldBeUnload(transactionalEditingDomain.getResourceSet(), resource)) {
-                resource.unload();
+        for (Resource res : Iterables.concat(super.getResources(), getSemanticResources(), super.getControlledResources())) {
+            if (canUnload(rs, res)) {
+                res.unload();
             }
-            transactionalEditingDomain.getResourceSet().getResources().remove(resource);
-        }
-        for (final Resource res : getSemanticResources()) {
-            if (res.getResourceSet() != null) {
-                if (couldBeUnload(res.getResourceSet(), res)) {
-                    res.unload();
-                }
-            }
-            transactionalEditingDomain.getResourceSet().getResources().remove(res);
-        }
-        for (final Resource res : super.getControlledResources()) {
-            if (res.getResourceSet() != null) {
-                if (couldBeUnload(res.getResourceSet(), res)) {
-                    res.unload();
-                }
-            }
-            transactionalEditingDomain.getResourceSet().getResources().remove(res);
+            rs.getResources().remove(res);
         }
         super.getAnalyses().clear();
         super.getResources().clear();
         super.getControlledResources().clear();
+    }
+
+    /*
+     * Don't try to unload metamodel resources.
+     */
+    private boolean canUnload(ResourceSet rset, Resource resource) {
+        return resource.getURI() != null && rset.getPackageRegistry().getEPackage(resource.getURI().toString()) == null;
     }
 
     // *******************
@@ -1496,11 +1479,4 @@ public class DAnalysisSessionImpl extends DAnalysisSessionEObjectImpl implements
         return builder.toString();
     }
 
-    /*
-     * unload only if resource has not an http scheme => this prevent special
-     * resources such as http://www.eclipse.org/EMF/2002 to be unloaded
-     */
-    private boolean couldBeUnload(ResourceSet rset, Resource resource) {
-        return resource.getURI() != null && rset.getPackageRegistry().getEPackage(resource.getURI().toString()) == null;
-    }
 }
